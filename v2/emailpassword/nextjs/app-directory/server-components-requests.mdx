@@ -20,14 +20,12 @@ Lets modify the Home page we made in a [previous step](../protecting-route.mdx) 
 ```tsx title="app/components/home.tsx"
 import { getSSRSession } from "supertokens-node/nextjs";
 import { SessionContainer } from "supertokens-node/recipe/session";
+import { SessionAuth } from 'supertokens-auth-react/recipe/session';
 import { cookies, headers } from "next/headers";
 declare let TryRefreshComponent: any; // typecheck-only, removed from output
-declare let SessionAuthForNextJS: any; // typecheck-only, removed from output
 import { redirect } from "next/navigation";
 // @ts-ignore
 import { TryRefreshComponent } from "./tryRefreshClientComponent";
-// @ts-ignore
-import { SessionAuthForNextJS } from "./sessionAuthForNextJS";
 
 async function getSSRSessionHelper(): Promise<{ session: SessionContainer | undefined; hasToken: boolean; hasInvalidClaims: boolean, error: Error | undefined }> {
     let session: SessionContainer | undefined;
@@ -59,9 +57,7 @@ export async function HomePage() {
             return redirect("/auth");
         }
 
-        if (hasInvalidClaims) {
-            return <SessionAuthForNextJS />;
-        } else {
+        if (!hasInvalidClaims) {
             return <TryRefreshComponent />;
         }
     }
@@ -87,24 +83,30 @@ export async function HomePage() {
         // The TryRefreshComponent will try to refresh the session
         return <TryRefreshComponent />
     } else if (userInfoResponse.status === 403) {
-        // SessionAuthForNextJS will redirect based on which claim is invalid
-        return <SessionAuthForNextJS />;
+        // SessionAuth will redirect based on which claim is invalid
+        return <SessionAuth />;
     }
 
     // You can use `userInfoResponse` to read the users session information
     // highlight-end
 
+    // Get initial session auth context (SSRSessionAuthContext) 
+    // and pass session data to the client
+    const initialSessionAuthContext = await getInitialSessionAuthContext(session);
+
     return (
-        <SessionAuthForNextJS>
+        <SessionAuth initialSessionAuthContext={initialSessionAuthContext}>
             <div>
                 {message}
             </div>
-        </SessionAuthForNextJS>
+        </SessionAuth>
     );
 }
 ```
 
 We use `session` returned by `getSSRSession` to get the access token of the user. We can then send the access token as a header to the API. When the API calls `withSession` it will try to read the access token from the headers and if a session exists it will return the information. You can use the `session` object to fetch other information such as `session.getUserId()`.
+
+We then use `getInitialSessionAuthContext(session)` to generate `initialSessionAuthContext` and pass it to `SessionAuth` (client component). This session context will be used on server render and the first render before mount on the client side. For detailed explanation [see this issue](https://github.com/supertokens/supertokens-auth-react/issues/790).
 
 </PreBuiltUIContent>
 
